@@ -1,0 +1,233 @@
+{
+ "cells": [
+  {
+   "cell_type": "code",
+   "execution_count": 10,
+   "id": "03d5eaf9",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "from selenium import webdriver\n",
+    "from selenium.webdriver.chrome.service import Service\n",
+    "from selenium.webdriver.common.by import By\n",
+    "from selenium.webdriver.support.ui import Select\n",
+    "from bs4 import BeautifulSoup\n",
+    "import time\n",
+    "import os\n",
+    "import pandas as pd\n",
+    "import shutil\n",
+    "from datetime import datetime"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 11,
+   "id": "403d1379",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Set the website URL\n",
+    "website = 'http://webapps.daff.gov.za/amis/amis_price_search.jsp'\n",
+    "\n",
+    "# Path to Chrome WebDriver executable file\n",
+    "driver_path = r'C:\\Users\\PC\\Documents\\INTERNSHIP\\chromedriver.exe'\n",
+    "\n",
+    "# Create a Service object with the path to the executable\n",
+    "service = Service(executable_path=driver_path)\n",
+    "\n",
+    "# Launch Chrome WebDriver using the Service object\n",
+    "driver = webdriver.Chrome(service=service)\n",
+    "\n",
+    "# Load the website\n",
+    "driver.get(website)\n",
+    " \n",
+    "# Wait for the table to load\n",
+    "driver.implicitly_wait(20)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 12,
+   "id": "a784073d",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Create lists of markets and products\n",
+    "# Find the select element with id 'cbSearchMarket'\n",
+    "market_select = Select(driver.find_element(By.ID, 'cbSearchMarket'))\n",
+    "# Extract the visible text for each product\n",
+    "markets = [market.get_attribute('innerHTML') for market in market_select.options]\n",
+    "\n",
+    "# find the select element by id\n",
+    "select_element = Select(driver.find_element(By.ID,\"cbSearchProduct\"))\n",
+    "\n",
+    "# get all the options from the select element\n",
+    "options = select_element.options\n",
+    "\n",
+    "# create an empty list to store the option values\n",
+    "products = []\n",
+    "\n",
+    "# iterate over the options and get their values\n",
+    "for option in options:\n",
+    "    products.append(option.get_attribute(\"value\"))\n",
+    "    \n",
+    "products=products[1:]\n",
+    "\n",
+    "\n",
+    "# Find the select element with id 'cbSearchMarket'\n",
+    "#product_select = Select(driver.find_element(By.ID, 'cbSearchProduct'))\n",
+    "# Extract the visible text for each product\n",
+    "#products = [product.get_attribute('innerHTML') for product in product_select.options][1:]"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 14,
+   "id": "f9277c7d",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "def download_excel_file(market, product):\n",
+    "    # Select the desired options\n",
+    "    period_select = Select(driver.find_element(By.ID, 'cbPeriod'))\n",
+    "    period_select.select_by_visible_text('Last 90 Days')\n",
+    "    \n",
+    "    # select the market and product\n",
+    "    market_select = Select(driver.find_element(By.ID, 'cbSearchMarket'))\n",
+    "    market_select.select_by_visible_text(market)\n",
+    "    select_element = Select(driver.find_element(By.ID, 'cbSearchProduct'))\n",
+    "    select_element.select_by_value(product)\n",
+    "\n",
+    "\n",
+    "    # Select the default options for other filters\n",
+    "    variety_select = Select(driver.find_element(By.ID, 'cbSearchVariety'))\n",
+    "    variety_select.select_by_visible_text('All Varieties')\n",
+    "    class_select = Select(driver.find_element(By.ID, 'cbSearchClass'))\n",
+    "    class_select.select_by_visible_text('All Classes')\n",
+    "    size_select = Select(driver.find_element(By.ID, 'cbSearchSize'))\n",
+    "    size_select.select_by_visible_text('All Sizes')\n",
+    "    package_select = Select(driver.find_element(By.ID, 'cbSearchContainer'))\n",
+    "    package_select.select_by_visible_text('All Packages')\n",
+    "\n",
+    "    # Find and click the \"View Prices\" button\n",
+    "    view_prices_button = driver.find_element(By.ID, \"btnDBSearch\")\n",
+    "    view_prices_button.click()\n",
+    "\n",
+    "    # Wait for the results to load\n",
+    "    time.sleep(30)\n",
+    "\n",
+    "    # Check if \"No price available!\" text exists in the page source\n",
+    "    if \"NO PRICES AVAILABLE!\" in driver.page_source:\n",
+    "        return None\n",
+    "\n",
+    "    # Find and click the \"Export\" button\n",
+    "    export_button = driver.find_element(By.ID, \"btnExport\")\n",
+    "    export_button.click()\n",
+    "\n",
+    "    # Wait for the download to complete\n",
+    "    time.sleep(20)\n",
+    "\n",
+    "    # Find the most recent file in the default download folder\n",
+    "    download_folder = r'C:\\Users\\PC\\Downloads'\n",
+    "    files = os.listdir(download_folder)\n",
+    "    files = [os.path.join(download_folder, f) for f in files]\n",
+    "    files = [f for f in files if f.endswith(\".xls\") or f.endswith(\".xlsx\")]\n",
+    "\n",
+    "    # Create the web_files folder if it doesn't exist\n",
+    "    if not os.path.exists(os.path.join(download_folder, \"web_files\")):\n",
+    "        os.makedirs(os.path.join(download_folder, \"web_files\"))\n",
+    "\n",
+    "    # Move the downloaded files to a folder with the market name and a timestamp\n",
+    "    for file in files:\n",
+    "        timestamp = datetime.now().strftime(\"%Y%m%d_%H%M%S\")\n",
+    "        market_folder = os.path.join(download_folder, \"web_files\", market.replace(\" \", \"_\"))\n",
+    "        if not os.path.exists(market_folder):\n",
+    "            os.makedirs(market_folder)\n",
+    "        new_file_name = os.path.splitext(os.path.basename(file))[0] + \"_\" + timestamp + os.path.splitext(file)[1]\n",
+    "        shutil.move(file, os.path.join(market_folder, new_file_name))\n",
+    "\n",
+    "    return files"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "8e5f1222",
+   "metadata": {
+    "scrolled": true
+   },
+   "outputs": [],
+   "source": [
+    "# call the function for each market and product\n",
+    "#THIS CODE WILL DOWNLOAD THE FILES AND MAY TAKE A WHILE\n",
+    "\n",
+    "for market in markets:\n",
+    "    for product in products:\n",
+    "        download_excel_file(market, product)\n"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "77234652",
+   "metadata": {},
+   "outputs": [],
+   "source": []
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "2e83cdbb",
+   "metadata": {},
+   "outputs": [],
+   "source": []
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "2a5cbba4",
+   "metadata": {},
+   "outputs": [],
+   "source": []
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "65b5e6ef",
+   "metadata": {},
+   "outputs": [],
+   "source": []
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "583e3836",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "#driver.quit()"
+   ]
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "Python 3 (ipykernel)",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.10.11"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 5
+}
